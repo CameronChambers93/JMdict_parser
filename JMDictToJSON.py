@@ -1,14 +1,14 @@
 import sys
-import json
 import pdb
 import os
-import codecs
-import pickle as pickle
-import queue
 import re
 import time
 import math
 
+cDir = os.path.dirname(os.path.abspath(__file__))
+filename = os.path.join(cDir, 'JMdict_e')
+
+# Class used to handle spacing and newlines when printing text
 class Text:
     def getWhitespace(self, indent, initialIndent) -> str:
         return ' '*(indent + initialIndent)
@@ -19,17 +19,12 @@ class Text:
     def getSpace(self, indent) -> str:
         return '' if indent == 0 else ' '
 
-class JMdict:
-    def __init__(self):
-        self.entries = []
-
-    def addEntry(self, entry) -> None:
-        self.entries.append(entry)
-
-
-# k_ele*
-# r_ele+
-# sense+
+# Class for entries of the JMDict. Each has the following form:
+#
+# ent_seq: int
+# k_ele: k_ele*
+# r_ele: r_ele*
+# sense: sense+
 class Entry(Text):
     def __init__(self, ent_seq, k_ele, r_ele, sense):
         self.ent_seq = ent_seq
@@ -40,7 +35,7 @@ class Entry(Text):
     def getEnt_seqString(self, indent=0, initalIndent=0):
         return self.ent_seq.toString(indent, initalIndent)
 
-    def getEleString(self, name, ele, indent=0, initialIndent=0):
+    def getFieldString(self, name, ele, indent=0, initialIndent=0):
         if len(ele) == 0: return ''
         whitespace1 = self.getWhitespace(indent, initialIndent)
         whitespace2 = self.getWhitespace(indent, initialIndent + indent)
@@ -58,16 +53,19 @@ class Entry(Text):
     def toString(self, indent=0, initialIndent=0, comma=',') -> str:
         msg = ""
         ent_seq = self.getEnt_seqString(indent, initialIndent)
-        k_ele = self.getEleString('k_ele', self.k_ele, indent, initialIndent)
-        r_ele = self.getEleString('r_ele', self.r_ele, indent, initialIndent)
-        sense = self.getEleString('sense', self.sense, indent, initialIndent)
+        k_ele = self.getFieldString('k_ele', self.k_ele, indent, initialIndent)
+        r_ele = self.getFieldString('r_ele', self.r_ele, indent, initialIndent)
+        sense = self.getFieldString('sense', self.sense, indent, initialIndent)
         newline = self.getNewline(indent)
         whitespace = self.getWhitespace(indent, initialIndent-indent)
         msg = '{{{ent_seq}{k_ele}{r_ele}{sense}{newline}{whitespace}}}{comma}'.format(ent_seq=ent_seq, k_ele=k_ele, r_ele=r_ele, sense=sense, newline=newline, whitespace=whitespace, comma=comma)
         return msg
 
-# all *
-class Sense:
+# Contains information about the entry, including definitions, origins, synonyms, antonyms, etc.
+# All fields have the following form:
+#
+# field: [string]*
+class Sense(Text):
     def __init__(self, stagk, stagr, pos, xref, ant, field, misc, s_inf, lsource, dial, gloss):
         self.fields = {}
         if (not len(stagk) == 0):
@@ -106,7 +104,13 @@ class Sense:
         msg += '{newline}{whitespace1}}}'.format(newline=newline, whitespace1=whitespace1)
         return msg
 
-class K_Ele:
+# Contains information about kanji in an entry (if kanji exists)
+# Has the following form:
+#
+# keb: int
+# ke_inf: [string]*
+# ke_pri: [string]*
+class K_Ele(Text):
     def __init__(self, keb, ke_inf, ke_pri):
         self.keb = keb
         self.ke_inf = Ke_inf(ke_inf)
@@ -121,7 +125,13 @@ class K_Ele:
         msg = '{{{keb}{ke_inf}{ke_pri}{newline}{whitespace}}}'.format(keb = keb, ke_inf = ke_inf, ke_pri = ke_pri, newline=newline, whitespace=whitespace)
         return msg
 
-class R_Ele:
+# Contains information about the reading of an entry
+# Has the following form:
+#
+# keb: int
+# ke_inf: [string]*
+# ke_pri: [string]*
+class R_Ele(Text):
     def __init__(self, reb, re_nokanji, re_restr, re_inf, re_pri):
         self.reb = reb
         self.re_nokanji = Re_nokanji(re_nokanji)
@@ -140,6 +150,7 @@ class R_Ele:
         msg = '{{{reb}{re_nokanji}{re_restr}{re_inf}{re_pri}{newline}{whitespace}}}'.format(reb=reb, re_nokanji=re_nokanji, re_restr = re_restr, re_inf=re_inf, re_pri=re_pri, newline=newline, whitespace=whitespace)
         return msg
 
+# Will be used to process tags and connections between words
 class Entities:
     def __init__(self):
         self.entities = {}
@@ -150,6 +161,7 @@ class Entities:
     def addEntity(self, entityType, entityName, entityValue):
         self.entities[entityType][entityName] = entityValue
 
+# Used for elements with a single value
 class PCData(Text):
     def __init__(self, name, value):
         self.name = name
@@ -175,6 +187,7 @@ class PCData(Text):
     def getName(self):
         return self.name
 
+# Used for elements with multiple values
 class PCDataArray(PCData):
     def __init__(self, name, values):
         pcdata = []
@@ -198,26 +211,34 @@ class PCDataArray(PCData):
         msg += "{newline}{indent1}]".format(newline=newline, indent1=whitespace1)
         return msg
 
+# Id for a given entry
 class Ent_seq(PCData):
     def __init__(self, value):
         super().__init__('ent_seq', value)
 
+# The writing of the element, if it contains kanji characters
 class Keb(PCData):
     def __init__(self, value):
         super().__init__('keb', value)
 
+# Field related to the orthography of the element
 class Ke_inf(PCDataArray):
     def __init__(self, value):
         super().__init__('ke_inf', value)
 
+# Along with re_pri, will contain information about the 'relative priority of a word'
+# For instance, if the tag 'news1/news2' is present, that indicates the word is used often in news publications,
+#   and as such can be considered a 'highly used' word
 class Ke_pri(PCDataArray):
     def __init__(self, value):
         super().__init__('ke_pri', value)
 
+# The reading of the element
 class Reb(PCData):
     def __init__(self, value):
         super().__init__('reb', value)
 
+# Indicates that the reb, while associated with the keb of an element, cannot be regarded as a true reading of the kanji
 class Re_nokanji(PCData):
     def __init__(self, value):
         super().__init__('re_nokanji', value)
@@ -228,70 +249,86 @@ class Re_nokanji(PCData):
         else:
             return ''
         
-
+# Used to indicate that the reading only applies to a subset of the keb elements in the entry
 class Re_restr(PCDataArray):
     def __init__(self, value):
         super().__init__('re_restr', value)
 
+# Information pertaining to the specific reading. Typically will be used to indicate some unusual aspect of the reading
 class Re_inf(PCDataArray):
     def __init__(self, value):
         super().__init__('re_inf', value)
 
+# See Ke_pri
 class Re_pri(PCDataArray):
     def __init__(self, value):
         super().__init__('re_pri', value)
 
+#
 class Stagk(PCDataArray):
     def __init__(self, value):
         super().__init__('stagk', value)
 
+# If present, indicate that the sense is restricted to the lexeme represented by the keb and/or the reb
 class Stagr(PCDataArray):
     def __init__(self, value):
         super().__init__('stagr', value)
 
+# Part of speech information about the entry. 
+# In general where there are multiple senses in an entry, the part-of-speech of an earlier sense will apply to
+#     later senses unless there is a new part-of-speech indicated.
 class Pos(PCDataArray):
     def __init__(self, value):
         super().__init__('pos', value)
 
+# Used to indicate a cross-reference to another entry with a similar or related meaning or sense
 class Xref(PCDataArray):
     def __init__(self, value):
         super().__init__('xref', value)
 
+# Used to indicate another entry which is an antonym of the current entry/sense. The content of this element must exactly
+#     match that of a keb or reb element in another entry.
 class Ant(PCDataArray):
     def __init__(self, value):
         super().__init__('ant', value)
 
+# Information about the field of application of the entry/sense (computers, economics, music, etc.)
 class Field(PCDataArray):
     def __init__(self, value):
         super().__init__('field', value)
 
+# This element is used for other relevant information about the entry/sense. As with part-of-speech, 
+#     information will usually apply to several senses.
 class Misc(PCDataArray):
     def __init__(self, value):
         super().__init__('misc', value)
 
+# The sense-information elements provided for additional information to be recorded about a sense. Typical usage would
+#     be to indicate such things as level of currency of a sense, the regional variations, etc.
 class S_inf(PCDataArray):
     def __init__(self, value):
         super().__init__('s_inf', value)
 
+# This element records the information about the source language(s) of a loan-word/gairaigo.
+# If the source language is other than English, the language is indicated by the xml:lang attribute
 class Lsource(PCDataArray):
     def __init__(self, value):
         super().__init__('lsource', value)
 
+# For words specifically associated with regional dialects in Japanese, the entity code for that dialect, e.g. ksb for Kansaiben.
 class Dial(PCDataArray):
     def __init__(self, value):
         super().__init__('dial', value)
 
+# Target-language words or phrases which are equivalents to the Japanese word defined in an entry.
+# This element would normally be present, however it may be omitted in entries which are purely for a cross-reference.
 class Gloss(PCDataArray):
     def __init__(self, value):
         super().__init__('gloss', value)
 
-cDir = os.path.dirname(os.path.abspath(__file__))
-filename = os.path.join(cDir, 'JMdict_e')
-
 class Controller(Text):
     def __init__(self):
         self.entities = Entities()
-        self.jmdict = JMdict()
         self.entries = {}
 
     def addEntityType(self, line) -> str:
@@ -507,23 +544,32 @@ class Controller(Text):
         msg += "{newline}{whitespace2}]".format(newline=newline, whitespace2=whitespace2)
         return msg
 
-    def saveData(self):
-        indent = 0 if len(sys.argv) == 1 else int(sys.argv[1])
+    def saveData(self, indent):
         with open('output.json', "w", encoding="utf8") as write_file:
             write_file.write(self.toString(indent,0))
 
-     
-    class smart_dict(dict):
-         def __missing__(self, key):
-             return 'exp'
-
 if __name__ == '__main__':
-    controller = Controller()
-    print('loading dict')
-    epoch = time.time()
-    controller.loadDict(filename)
-    print(time.time() - epoch)
+    try:
+        indent = 0
+        if len(sys.argv) > 0:
+            for i in range(1, len(sys.argv)):
+                option = re.search(r'--([a-z]*)=([a-z0-9]*)', sys.argv[i])
+                if option == None:
+                    raise Exception(sys.argv[i])
+                name = option.group(1)
+                value = option.group(2)
+                if name == 'indent':
+                    indent = int(value)
+                else:
+                    raise Exception(sys.argv[i])
+        controller = Controller()
+        print('loading dict')
+        epoch = time.time()
+        controller.loadDict(filename)
+        print('Time elapsed: ' + str(time.time() - epoch))
 
-    #data = loadDict(filename)
-    #JMDict = new JMDict();
-    #controller.saveData()
+        #data = loadDict(filename)
+        pdb.set_trace()
+        controller.saveData(indent)
+    except Exception as e:
+        print("Invalid argument '{invalidArg}'".format(invalidArg=e.args[0]))
