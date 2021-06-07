@@ -463,32 +463,33 @@ class Controller(Text):
         gloss = []
         line = self.read_file.readline()
         while '</sense>' not in line:
-            if '<stagk>' in line:
+            if '<stagk' in line:
                 stagk.append(self.getStagk(line))
-            elif '<stagr>' in line:
+            elif '<stagr' in line:
                 stagr.append(self.getStagr(line))
-            elif '<pos>' in line:
+            elif '<pos' in line:
                 pos.append(self.getPos(line))
-            elif '<xref>' in line:
+            elif '<xref' in line:
                 xref.append(self.getXref(line))
-            elif '<ant>' in line:
+            elif '<ant' in line:
                 ant.append(self.getAnt(line))
-            elif '<field>' in line:
+            elif '<field' in line:
                 field.append(self.getField(line))
-            elif '<misc>' in line:
+            elif '<misc' in line:
                 misc.append(self.getMisc(line))
-            elif '<s_inf>' in line:
+            elif '<s_inf' in line:
                 s_inf.append(self.getS_inf(line))
             elif '<lsource' in line and 'xml:lang' in line:
                 lsource.append(self.getLSource(line))
-            elif '<dial>' in line:
+            elif '<dial' in line:
                 dial.append(self.getDial(line))
-            elif '<gloss>' in line:
+            elif '<gloss' in line:
                 gloss.append(self.getGloss(line))
             line = self.read_file.readline()
         return Sense(stagk, stagr, pos, xref, ant, field, misc, s_inf, lsource, dial, gloss)
     
     def processEntry(self, lowMemory=False):
+        pdb.set_trace()
         line = self.read_file.readline()
         ent_seq = self.parseEnt_seq(line)
         line = self.read_file.readline()
