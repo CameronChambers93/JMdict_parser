@@ -41,7 +41,7 @@ class Entry(Text):
         whitespace2 = self.getWhitespace(indent, initialIndent + indent)
         newline = self.getNewline(indent)
         space = self.getSpace(indent)
-        msg = ',{newline}{whitespace1}{name}:{space}['.format(name=name, newline=newline, whitespace1=whitespace1, space=space)
+        msg = ',{newline}{whitespace1}"{name}":{space}['.format(name=name, newline=newline, whitespace1=whitespace1, space=space)
         for i in range(len(ele)):
             e = ele[i]
             comma = ',' if i > 0 else ''
@@ -178,7 +178,7 @@ class PCData(Text):
         whitespace = self.getWhitespace(indent, initialIndent)
         name = self.getName()
         space = self.getSpace(indent)
-        msg = '{comma}{newline}{indent}{name}:{space}"{value}"'.format(comma=comma, indent=whitespace, name=name, value=value, space=space, newline=newline)
+        msg = '{comma}{newline}{indent}"{name}":{space}"{value}"'.format(comma=comma, indent=whitespace, name=name, value=value, space=space, newline=newline)
         return msg
 
     def getValue(self):
@@ -203,7 +203,7 @@ class PCDataArray(PCData):
         whitespace2 = self.getWhitespace(indent*2, initialIndent)
         space = self.getSpace(indent)
         name = self.getName()
-        msg = "{comma}{newline}{indent1}{name}:{space}[".format(comma=comma, newline=newline, indent1=whitespace1, name=name, space=space)
+        msg = '{comma}{newline}{indent1}"{name}":{space}['.format(comma=comma, newline=newline, indent1=whitespace1, name=name, space=space)
         for i in range(len(values)):
             value = values[i].getValue()
             msg += '{newline}{whitespace2}"{value}"'.format(newline = newline, whitespace2 = whitespace2, value=value)
@@ -488,7 +488,7 @@ class Controller(Text):
             line = self.read_file.readline()
         return Sense(stagk, stagr, pos, xref, ant, field, misc, s_inf, lsource, dial, gloss)
     
-    def processEntry(self):
+    def processEntry(self, lowMemory=False):
         line = self.read_file.readline()
         ent_seq = self.parseEnt_seq(line)
         line = self.read_file.readline()
@@ -504,7 +504,10 @@ class Controller(Text):
             elif 'sense' in line:
                 sense.append(self.processSense())
             line = self.read_file.readline()
-        self.entries[ent_seq.getValue()] = Entry(ent_seq, k_ele, r_ele, sense)
+        entry = Entry(ent_seq, k_ele, r_ele, sense)
+        if (lowMemory):
+            return entry
+        self.entries[ent_seq.getValue()] = entry
 
     def loadDict(self, filename):
         self.count = 0
@@ -526,12 +529,51 @@ class Controller(Text):
                 line = self.read_file.readline()
             except Exception:
                 line = None
-        print(self.count)
 
     def printStatus(self):
         os.system('cls' if os.name=='nt' else 'clear')
         print(str(math.floor((self.count / 382000)*100)) + '% done')
         print(self.count)
+
+    def saveInPlace(self, filename, indent=0, initialIndent=0):
+        write_file = open('output.json', "w", encoding="utf8")
+        write_file.write("")
+        write_file.close()
+        newline = self.getNewline(indent)
+        whitespace2 = self.getWhitespace(indent, initialIndent-indent)
+        msg = self.toStringInPlace(filename, write_file, indent, initialIndent)
+        msg += "{newline}{whitespace2}]".format(newline=newline, whitespace2=whitespace2)
+        self.appendToFile(msg)
+
+    def appendToFile(self, msg):
+        write_file = open('output.json', "a", encoding="utf8")
+        write_file.write(msg)
+
+    def toStringInPlace(self, filename, write_file, indent=0, initialIndent=0):
+        msg = "["
+        self.count = 0
+        self.read_file = open(filename, "r", encoding="utf8")
+##          DON'T USE READLINES - No need to load into memory
+        line = self.read_file.readline()
+        while (line != ''):
+            if ('<!-- ' in line):
+                if ('-->' in line):
+                    self.processEntities(line)
+                while ('-->' not in line):
+                    line = self.read_file.readline()
+            elif '<entry>' in line:
+                msg += self.processEntry(lowMemory=True).toString(indent, initialIndent+indent, ',')
+                self.count += 1
+                if self.count % 1000 == 0:
+                    self.printStatus()
+                if self.count % 10000 == 0:
+                    self.appendToFile(msg)
+                    msg = ""
+            try:
+                line = self.read_file.readline()
+            except Exception:
+                line = None
+        return msg
 
     def toString(self, indent=0, initialIndent=0):
         newline = self.getNewline(indent)
@@ -544,20 +586,24 @@ class Controller(Text):
         msg += "{newline}{whitespace2}]".format(newline=newline, whitespace2=whitespace2)
         return msg
 
-    def saveData(self, indent):
+    def saveData(self, indent=0):
         with open('output.json', "w", encoding="utf8") as write_file:
             write_file.write(self.toString(indent,0))
 
 if __name__ == '__main__':
     try:
         indent = 0
+        lowMemory = False
         if len(sys.argv) > 0:
             for i in range(1, len(sys.argv)):
-                option = re.search(r'--([a-z]*)=([a-z0-9]*)', sys.argv[i])
+                option = re.search(r'--([a-z-]*)(=([a-z0-9]*))*', sys.argv[i])
                 if option == None:
                     raise Exception(sys.argv[i])
                 name = option.group(1)
-                value = option.group(2)
+                if name == 'low-memory':
+                    lowMemory = True
+                    continue
+                value = option.group(3)
                 if name == 'indent':
                     indent = int(value)
                 else:
@@ -565,11 +611,13 @@ if __name__ == '__main__':
         controller = Controller()
         print('loading dict')
         epoch = time.time()
-        controller.loadDict(filename)
+
+        if (lowMemory):
+            controller.saveInPlace(filename, indent)
+        else:
+            controller.loadDict(filename)
+            controller.saveData(indent)
         print('Time elapsed: ' + str(time.time() - epoch))
 
-        #data = loadDict(filename)
-        pdb.set_trace()
-        controller.saveData(indent)
     except Exception as e:
         print("Invalid argument '{invalidArg}'".format(invalidArg=e.args[0]))

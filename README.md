@@ -15,6 +15,7 @@ python3 JMDictToJSON.py [options]
 ```
 Options
 * --indent=number : Number of leading spaces added to each nested level when outputting JSON
+* --low-memory: This mode allows the script to run on machines with low memory. When analytics are added to this project, it is likely that some may not function with this mode enabled
 
 ## Output
 Current output is hardcoded to fit the needs of my own projects. Revisions will be made to make output format customizable. The following two examples show the format of the output. Note that since certain fields are optional for any given entry, some fields are omitted.
