@@ -182,7 +182,12 @@ class PCData(Text):
         return msg
 
     def getValue(self):
-        return self.value
+        if type(self.value) == bool:
+            return str(self.value).lower()  # Undo Python's boolean capitalization
+        elif type(self.value) == str:
+            return self.value.replace('"', '\\"')   # Make sure double quotes are escaped properly
+        else:
+            return self.value
 
     def getName(self):
         return self.name
@@ -415,38 +420,38 @@ class Controller(Text):
         return R_Ele(reb, re_nokanji, re_restr, re_inf, re_pri)
             
     
-    def getStagk(self, line) -> str:
+    def parseStagk(self, line) -> str:
         return PCData('stagk', re.sub(r'<[/]*stagk>(\n)*', '', line))
     
-    def getStagr(self, line) -> str:
+    def parseStagr(self, line) -> str:
         return PCData('stagr', re.sub(r'<[/]*stagr>(\n)*', '', line))
     
-    def getPos(self, line) -> str:
+    def parsePos(self, line) -> str:
         return PCData('pos', re.sub(r'(;)*<[/]*pos>(\n)*(&)*', '', line))
     
-    def getAnt(self, line) -> str:
+    def parseAnt(self, line) -> str:
         return PCData('ant', re.sub(r'<[/]*ant>(\n)*', '', line))
     
-    def getField(self, line) -> str:
+    def parseField(self, line) -> str:
         return PCData('field', re.sub(r'(;)*<[/]*field>(\n)*(&)*', '', line))
     
-    def getMisc(self, line) -> str:
+    def parseMisc(self, line) -> str:
         return PCData('misc', re.sub(r'(;)*<[/]*misc>(\n)*(&)*', '', line))
     
-    def getS_inf(self, line) -> str:
+    def parseS_inf(self, line) -> str:
         return PCData('s_inf', re.sub(r'<[/]*s_inf>(\n)*', '', line))
     
-    def getLSource(self, line) -> str:
+    def parseLsource(self, line) -> str:
         if 'xml:lang' in line:
             return PCData('lsource', re.search(r'xml:lang="([a-z]*)"', line).group(1))
 
-    def getDial(self, line) -> str:
+    def parseDial(self, line) -> str:
         return PCData('dial', re.sub(r'(;)*<[/]*dial>(\n)*(&)*', '', line))
     
-    def getGloss(self, line) -> str:
-        return PCData('gloss', re.sub(r'<[/]*gloss>(\n)*', '', line))
+    def parseGloss(self, line) -> str:
+        return PCData('gloss', re.sub(r'<[/]*gloss(?:[^>])*>(\n)*', '', line))
     
-    def getXref(self, line) -> str:
+    def parseXref(self, line) -> str:
         return PCData('xref', re.sub(r'<[/]*xref>(\n)*', '', line))
     
     def processSense(self):
@@ -464,32 +469,31 @@ class Controller(Text):
         line = self.read_file.readline()
         while '</sense>' not in line:
             if '<stagk' in line:
-                stagk.append(self.getStagk(line))
+                stagk.append(self.parseStagk(line))
             elif '<stagr' in line:
-                stagr.append(self.getStagr(line))
+                stagr.append(self.parseStagr(line))
             elif '<pos' in line:
-                pos.append(self.getPos(line))
+                pos.append(self.parsePos(line))
             elif '<xref' in line:
-                xref.append(self.getXref(line))
+                xref.append(self.parseXref(line))
             elif '<ant' in line:
-                ant.append(self.getAnt(line))
+                ant.append(self.parseAnt(line))
             elif '<field' in line:
-                field.append(self.getField(line))
+                field.append(self.parseField(line))
             elif '<misc' in line:
-                misc.append(self.getMisc(line))
+                misc.append(self.parseMisc(line))
             elif '<s_inf' in line:
-                s_inf.append(self.getS_inf(line))
+                s_inf.append(self.parseS_inf(line))
             elif '<lsource' in line and 'xml:lang' in line:
-                lsource.append(self.getLSource(line))
+                lsource.append(self.parseLsource(line))
             elif '<dial' in line:
-                dial.append(self.getDial(line))
+                dial.append(self.parseDial(line))
             elif '<gloss' in line:
-                gloss.append(self.getGloss(line))
+                gloss.append(self.parseGloss(line))
             line = self.read_file.readline()
         return Sense(stagk, stagr, pos, xref, ant, field, misc, s_inf, lsource, dial, gloss)
     
     def processEntry(self, lowMemory=False):
-        pdb.set_trace()
         line = self.read_file.readline()
         ent_seq = self.parseEnt_seq(line)
         line = self.read_file.readline()
