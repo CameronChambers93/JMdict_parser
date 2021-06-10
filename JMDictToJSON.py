@@ -499,6 +499,8 @@ class Controller(Text):
         line = self.read_file.readline()
         k_ele = []
         r_ele = []
+        if self.count == 1000:
+            pdb.set_trace()
         sense = []
         self.count += 1
         while '</entry>' not in line:
@@ -547,6 +549,7 @@ class Controller(Text):
         newline = self.getNewline(indent)
         whitespace2 = self.getWhitespace(indent, initialIndent-indent)
         msg = self.toStringInPlace(filename, write_file, indent, initialIndent)
+        msg = msg[0:-1] # Remove trailing comma
         msg += "{newline}{whitespace2}]".format(newline=newline, whitespace2=whitespace2)
         self.appendToFile(msg)
 

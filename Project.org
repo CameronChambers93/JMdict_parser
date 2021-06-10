@@ -1,11 +1,11 @@
-#+OPTIONS: ^:nil
 
-** Introduction
+#+OPTIONS: ^:nil
+* Introduction
 
    This document will serve as the recordings of my work with parsing the incredibly expansive Japanese to English
-   dictionary, JMDICT. The purpose of this parser is to import the JMDICT dictionary into an SQLite database for
-   use with a personal project. I am writing this document both for myself and for demonstration purposes. The
-   dictionary is defined by a grammar, which I will be using as the instructions for parsing.
+   dictionary, JMDICT. The purpose of this parser is to a) generate a JSON version of the file to be used with other
+   projects, namely my Yosh!eru project. I am writing this document both for myself and for demonstration purposes. The
+   dictionary is defined by a grammar, which I detail below.
    
 * Data Definitions
   
@@ -20,7 +20,7 @@
 - k_ele ( keb, ke_inf*, ke_pri* )
   + The defining element of each entry. In its absence, the reading element is such.
   + Majority of entries have a single kanji element associated with a word in Japanese
-  + Where there are multiple kanji elements within an entry, they will be orthographical variants
+  + Where there are multiple kanji elements within an entry, they will be orthographical variants (alternate spellings mostly)
   + Common "mis-spellings" may be included
   + Synonyms are not included
 - keb ( #PCDATA )
@@ -33,11 +33,12 @@
   + Along with re_pri field, provided to record information about the relative priority of the entry
   + Consist of codes indicating the word appears in various references which can be taken as an indication of frequency of usage.
   + Current values in this field are:
-    - news1/2
-    - ichi1/2
-    - spec1/2
-    - gai1/2
-    - nfxx
+    - news1/2: appears in the "wordfreq" file compiled by Alexandre Girardi from the Mainichi Shimbun
+    - ichi1/2: appears in the "Ichimango goi bunruishuu", Senmon Kyouiku Publishing, Tokyo, 1998
+    - spec1/2: a small number of words use this marker when they are detected as being common, but are not included in other lists.
+    - gai1/2: common loanwords, based on the wordfreq file.
+    - nfxx: this is an indicator of frequency-of-use ranking in the wordfreq file. "xx" is the number of the set of 500 words in
+      which the entry can be found, with "01" assigned to the first 500, "02" to the second, and so on.
 - r_ele ( reb, re_nokanji?, re_restr*, re_inf*, re_pri* )
   + The reading element typically contains the valid readings of the word(s) in the kanji element using modern kanadzukai
   + Where there are multiple reading elements, they will typically be alternative readings of the kanji element
@@ -101,10 +102,10 @@
   + The sense-information elements provided for additional information to be recorded about a sense.
   + Typical usage would be to indicate such things as level of currency of a sense, the regional variations, etc.
 
-
 * Use Cases
 
-This section will outline the use cases for this project, which will help in defining the database schema and algorithms needed. The web application will be referred to from here as 'the app', and any possible user simply as 'the user.'
+This section will outline the use cases for this project, which will help in defining the database schema and algorithms needed. The web application
+will be referred to from here as 'the app', and any possible user simply as 'the user.'
 
 1) The app will deliver an audio file to the user, along with a corresponding audio transcription of the file. The user will listen to the clip and 1) simply reveal the transcription, or 2) attempt to answer with the correct transcription (seeing the answer upon submission).
 2) The user will be able to create and edit 'decks' of 'flashcards' and test themselves with the flashcards.
@@ -116,11 +117,18 @@ This section will outline the use cases for this project, which will help in def
    - Examples of the word
    - JLPT level and other tags
 4) The user will be able to convert words and example sentences into flashcards and add them to a deck
+   
+* Script Usage
 
-* Database Structure
+  The script can be ran with the following command:
+#+BEGIN_SRC
+  python3 JMDictToJSON.py [--option]
+#+END_SRC
 
-To achieve Use Case 1, we will have each audio file stored locally, storing each of their file names in a Audio table.
-The file name will be the primary key, and each entry also have a field for JSON data. The JSON data will contain the
-audio transcription for the file, along with other possible information deemed necessary in the future.
+  The following options are available for use with the script.
 
-Use Case 2 constitutes the bulk of the work to be done in regards to database design. 
++ indent
+  1. By supplying --indent=#, will cause each nested level in the JSON file to have # number of indents inserted at the front of the line
++ low memory
+  - With --low-memory, tells the parser to keep a low memory profile. The output is written in chunks (currently every 10,000 entries), and
+    entries are not kept in memory. In the future when analytical capabilities are added to this project, some with likely not be available with this mode enabled.

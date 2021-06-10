@@ -1,0 +1,234 @@
+% Created 2021-06-09 Wed 21:15
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{fixltx2e}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{float}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{textcomp}
+\usepackage{marvosym}
+\usepackage{wasysym}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\tolerance=1000
+\author{Cameron}
+\date{\today}
+\title{Project}
+\hypersetup{
+  pdfkeywords={},
+  pdfsubject={},
+  pdfcreator={Emacs 25.2.2 (Org mode 8.2.10)}}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{Introduction}
+\label{sec-1}
+
+This document will serve as the recordings of my work with parsing the incredibly expansive Japanese to English
+dictionary, JMDICT. The purpose of this parser is to a) generate a JSON version of the file to be used with other
+projects, namely my Yosh!eru project. I am writing this document both for myself and for demonstration purposes. The
+dictionary is defined by a grammar, which I detail below.
+
+\section{Data Definitions}
+\label{sec-2}
+
+\begin{itemize}
+\item JMDict ( entry* )
+\item entry ( ent\_seq, k\_ele*, r\_ele+, sense+ )
+\begin{itemize}
+\item ent\_seq - Entry sequence number
+\item k\_ele - kanji elements
+\item r\_ele - reading elements
+\item sense - sense element
+\end{itemize}
+\item ent\_seq ( \#PCDATA )
+\begin{itemize}
+\item Unique numeric sequence number for each entry
+\end{itemize}
+\item k\_ele ( keb, ke\_inf*, ke\_pri* )
+\begin{itemize}
+\item The defining element of each entry. In its absence, the reading element is such.
+\item Majority of entries have a single kanji element associated with a word in Japanese
+\item Where there are multiple kanji elements within an entry, they will be orthographical variants (alternate spellings mostly)
+\item Common "mis-spellings" may be included
+\item Synonyms are not included
+\end{itemize}
+\item keb ( \#PCDATA )
+\begin{itemize}
+\item This element will contain a word or short phrase in Japanese which is written using at least one non-kana character.
+\item Valid characters are kanji, kana, related characters such as chouon and kurikaeshi, etc.
+\end{itemize}
+\item ke\_inf ( \#PCDATA )
+\begin{itemize}
+\item This is a coded information field related specifically to the orthography of the keb
+\item Will typically indicate some unusual aspect, such as okurigana irregularity.
+\end{itemize}
+\item ke\_pri ( \#PCDATA )
+\begin{itemize}
+\item Along with re\_pri field, provided to record information about the relative priority of the entry
+\item Consist of codes indicating the word appears in various references which can be taken as an indication of frequency of usage.
+\item Current values in this field are:
+\begin{itemize}
+\item news1/2: appears in the "wordfreq" file compiled by Alexandre Girardi from the Mainichi Shimbun
+\item ichi1/2: appears in the "Ichimango goi bunruishuu", Senmon Kyouiku Publishing, Tokyo, 1998
+\item spec1/2: a small number of words use this marker when they are detected as being common, but are not included in other lists.
+\item gai1/2: common loanwords, based on the wordfreq file.
+\item nfxx: this is an indicator of frequency-of-use ranking in the wordfreq file. "xx" is the number of the set of 500 words in
+which the entry can be found, with "01" assigned to the first 500, "02" to the second, and so on.
+\end{itemize}
+\end{itemize}
+\item r\_ele ( reb, re\_nokanji?, re\_restr*, re\_inf*, re\_pri* )
+\begin{itemize}
+\item The reading element typically contains the valid readings of the word(s) in the kanji element using modern kanadzukai
+\item Where there are multiple reading elements, they will typically be alternative readings of the kanji element
+\item In the absence of kanji, these elements will define the entry
+\end{itemize}
+\item reb ( \#PCDATA )
+\begin{itemize}
+\item This is restricted to kana and related characters such as chouon and kurikaeshi.
+\item Kana usage will be consistent between keb and reb elements (if one contains katakana, both will)
+\end{itemize}
+\item re\_nokanji ( \#PCDATA )
+\begin{itemize}
+\item This element, which will usually have a null value, indicates that the reb, while associated with the keb, cannot be regarded as a true reading of the kanji.
+\item It is typically used for words such as foreign place names, gairaigo which can be in kanji or katakana, etc.
+\end{itemize}
+\item re\_restr ( \#PCDATA )
+\begin{itemize}
+\item This element is used to indicate when the reading only applies to a subset of the keb elements in the entry.
+\item In its absence, all readings apply to all kanji elements.
+\item The contents of this element must exactly match those of one of the keb elements.
+\end{itemize}
+\item re\_inf ( \#PCDATA )
+\begin{itemize}
+\item General coded information pertaining to the specific reading.
+\item Typically it will be used to indicate some unusual aspect of the reading.
+\end{itemize}
+\item re\_pri ( \#PCDATA )
+\begin{itemize}
+\item See the comment on ke\_pri
+\end{itemize}
+\item sense ( stagk*, stagr*, pos*, xref*, ant*, field*, misc*, s\_inf*, lsource*, dial*, gloss* )
+\begin{itemize}
+\item The sense element will record the translational equivalent of the Japanese word, plus other related information.
+\item Where there are several distinctly different meanings of the word, multiple sense elements will be employed.
+\end{itemize}
+\item stagk ( \#PCDATA )
+\item stagr ( \#PCDATA )
+\begin{itemize}
+\item These elements, if present, indicate that the sense is restricted to the lexeme represented by the keb and/or reb.
+\end{itemize}
+\item xref ( \#PCDATA )
+\begin{itemize}
+\item This element is used to indicate a cross-reference to another entry with a similar or related meaning or sense.
+\item The content of this element is typically a keb or reb element in another entry.
+\item In some cases a keb will be followed by a reb and/or a sense number to provide a precise target for the cross-reference.
+\begin{itemize}
+\item Where this happens, a JIS "centre-dot" (0x2126) is placed between the components of the cross-reference. The target keb or reb must not contain a centre-dot.
+\end{itemize}
+\end{itemize}
+\item ant ( \#PCDATA )
+\begin{itemize}
+\item This element is used to indicate another entry which is an antonym of the current entry/sense.
+\item The content of this element must exactly match that of a keb or reb element in another entry.
+\end{itemize}
+\item pos ( \#PCDATA )
+\begin{itemize}
+\item Part-of-speech information about the entry/sense.
+\item Should use appropriate entity codes.
+\item In general where there are multiple senses in an entry, the part-of-speech of an earlier sense will apply to later senses unless there is a new part-of-speech indicated.
+\end{itemize}
+\item field ( \#PCDATA )
+\begin{itemize}
+\item Information about the field of application of the entry/sense.
+\item When absent, general application is implied.
+\item Entity coding for specific fields of application.
+\end{itemize}
+\item misc ( \#PCDATA )
+\begin{itemize}
+\item This element is used for other relevant information about the entry/sense.
+\item As with part-of-speech, information will usually apply to several senses.
+\end{itemize}
+\item lsource ( \#PCDATA )
+\begin{itemize}
+\item This element records the information about the source language(s) of a loan-word/gairaigo.
+\item If the source language is other than English, the language is indicated by the xml:lang attribute.
+\item The element value (if any) is the source word or phrase.
+\begin{itemize}
+\item lsource xml:lang - Defines the language(s) from which a loanword is drawn
+\item lsource ls\_type - Indicates whether the lsource elemnt fully or partially descrives the source word of phrase of the loadword. If absent, it will have the implied value of "full". Otherwise it will contain "part".
+\item lsource ls\_wasei - Indicates that the Japanese word has been constructed from words in the source language
+\end{itemize}
+\end{itemize}
+\item gloss ( \#PCDATA | pri )*
+\begin{itemize}
+\item Within each sense will be one or more "glosses", i.e. target-language words or phrases which are equivalents to the Japanese word.
+\item This element would normally be present, however it may be omitted in entries which are purely for a cross-reference.
+\begin{itemize}
+\item gloss xml:lang - defines the target language of the gloss
+\item gloss g\_type - Specifies that the gloss is of a particular type, e.g. "lit" (literal), "fig" (figurative), "expl" (explanation)
+\end{itemize}
+\end{itemize}
+\item pri ( \#PCDATA )
+\begin{itemize}
+\item These elements highlight particular target-language words which are strongly associated with the Japanese word.
+\item The purpose is to establish a set of target-language words which can effectively be used as head-words in a reverse target-language/Japanese relationship.
+\end{itemize}
+\item s\_inf ( \#PCDATA )
+\begin{itemize}
+\item The sense-information elements provided for additional information to be recorded about a sense.
+\item Typical usage would be to indicate such things as level of currency of a sense, the regional variations, etc.
+\end{itemize}
+\end{itemize}
+
+\section{Use Cases}
+\label{sec-3}
+
+This section will outline the use cases for this project, which will help in defining the database schema and algorithms needed. The web application
+will be referred to from here as 'the app', and any possible user simply as 'the user.'
+
+\begin{enumerate}
+\item The app will deliver an audio file to the user, along with a corresponding audio transcription of the file. The user will listen to the clip and 1) simply reveal the transcription, or 2) attempt to answer with the correct transcription (seeing the answer upon submission).
+\item The user will be able to create and edit 'decks' of 'flashcards' and test themselves with the flashcards.
+\item The user will be able to look up any word displayed on the app and see an entry for the word. The entries will include:
+\begin{itemize}
+\item The definition of the word
+\item Alternative words (Same definition)
+\item Words used within the word
+\item Kanji used within the word
+\item Examples of the word
+\item JLPT level and other tags
+\end{itemize}
+\item The user will be able to convert words and example sentences into flashcards and add them to a deck
+\end{enumerate}
+
+\section{Script Usage}
+\label{sec-4}
+
+The script can be ran with the following command:
+\begin{verbatim}
+python3 JMDictToJSON.py [--option]
+\end{verbatim}
+
+The following options are available for use with the script.
+
+\begin{itemize}
+\item indent
+\begin{enumerate}
+\item By supplying --indent=\#, will cause each nested level in the JSON file to have \# number of indents inserted at the front of the line
+\end{enumerate}
+\item low memory
+\begin{itemize}
+\item With --low-memory, tells the parser to keep a low memory profile. The output is written in chunks (currently every 10,000 entries), and
+entries are not kept in memory. In the future when analytical capabilities are added to this project, some with likely not be available with this mode enabled.
+\end{itemize}
+\end{itemize}
+% Emacs 25.2.2 (Org mode 8.2.10)
+\end{document}
